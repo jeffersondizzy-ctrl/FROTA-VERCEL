@@ -1,7 +1,8 @@
 import { supabase } from './supabase';
 
 export const storageService = {
-  // ESCALAS E DOCAS (Correção Erro 428C9)
+  // --- ESCALAS E DOCAS ---
+  // Remove ID e campos protegidos para evitar o erro 428C9
   async updateEscalaItemPartial(id: number, updates: any) {
     const { id: _, created_at: __, ...cleanUpdates } = updates;
     const { data, error } = await supabase
@@ -17,10 +18,10 @@ export const storageService = {
     if (error) throw error;
   },
 
-  // CHECKLISTS (Ajustado ao seu banco: image_032748.png)
+  // --- CHECKLISTS (VISTORIAS) ---
+  // Ajustado para usar 'veiculo_id' conforme seu banco real (image_032748.png)
   async saveChecklist(checklist: any) {
-    const { id, ...rest } = checklist;
-    // Seu banco usa 'veiculo_id' e 'status' (image_032748.png)
+    const { id, created_at, ...rest } = checklist;
     const { data, error } = await supabase
       .from('checklists')
       .insert([rest]) 
@@ -29,7 +30,16 @@ export const storageService = {
     return data;
   },
 
-  // NOTIFICAÇÕES (Usa 'timestamp' em vez de 'created_at': image_032748.png)
+  async getChecklists() {
+    const { data, error } = await supabase
+      .from('checklists')
+      .select('*, veiculos(place)')
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  // --- NOTIFICAÇÕES ---
+  // Usa 'timestamp' em vez de 'created_at' conforme image_032748.png
   async getNotifications() {
     const { data, error } = await supabase
       .from('notifications')
