@@ -1,18 +1,11 @@
 import { supabase } from './supabase';
 
-const TABLES = {
-  GROUPS: 'scale_groups',
-  ESCALA: 'escala_items',
-  CHECKLISTS: 'checklists',
-  NOTIFICATIONS: 'notifications',
-};
-
 export const storageService = {
-  // --- ESCALAS (RESOLVE ERRO 428C9) ---
-  async updateScaleGroupPartial(id: number, updates: any) {
+  // ESCALAS E DOCAS (Correção Erro 428C9)
+  async updateEscalaItemPartial(id: number, updates: any) {
     const { id: _, created_at: __, ...cleanUpdates } = updates;
     const { data, error } = await supabase
-      .from(TABLES.GROUPS)
+      .from('escala_items')
       .update(cleanUpdates)
       .eq('id', id);
     if (error) throw error;
@@ -20,53 +13,28 @@ export const storageService = {
   },
 
   async deleteScaleGroup(id: number) {
-    const { error } = await supabase.from(TABLES.GROUPS).delete().eq('id', id);
+    const { error } = await supabase.from('scale_groups').delete().eq('id', id);
     if (error) throw error;
   },
 
-  // --- DOCAS E ITENS (RESOLVE ERRO 428C9) ---
-  async updateEscalaItemPartial(id: number, updates: any) {
-    const { id: _, created_at: __, ...cleanUpdates } = updates;
-    const { data, error } = await supabase
-      .from(TABLES.ESCALA)
-      .update(cleanUpdates)
-      .eq('id', id);
-    if (error) throw error;
-    return data;
-  },
-
-  // --- CHECKLISTS (NOMES DE COLUNAS CORRIGIDOS CONFORME SCHEMA) ---
-  async getChecklists() {
-    const { data, error } = await supabase
-      .from(TABLES.CHECKLISTS)
-      .select('*, veiculos(place)') // Faz um join para pegar a placa se precisar
-      .order('created_at', { ascending: false });
-    return data || [];
-  },
-
+  // CHECKLISTS (Ajustado ao seu banco: image_032748.png)
   async saveChecklist(checklist: any) {
-    // Ajustando os campos para o que existe no seu banco (image_032748.png)
-    const dataToSave = {
-      veiculo_id: checklist.veiculo_id, // Use o UUID do veículo
-      status: checklist.status || 'Pendente',
-      observacoes: checklist.observacoes || '',
-      data_vistoria: new Date().toISOString()
-    };
-
+    const { id, ...rest } = checklist;
+    // Seu banco usa 'veiculo_id' e 'status' (image_032748.png)
     const { data, error } = await supabase
-      .from(TABLES.CHECKLISTS)
-      .insert([dataToSave])
+      .from('checklists')
+      .insert([rest]) 
       .select();
     if (error) throw error;
     return data;
   },
 
-  // --- NOTIFICAÇÕES (USANDO TIMESTAMP) ---
+  // NOTIFICAÇÕES (Usa 'timestamp' em vez de 'created_at': image_032748.png)
   async getNotifications() {
     const { data, error } = await supabase
-      .from(TABLES.NOTIFICATIONS)
+      .from('notifications')
       .select('*')
-      .order('timestamp', { ascending: false }); // Seu banco usa timestamp (image_032748.png)
+      .order('timestamp', { ascending: false });
     return data || [];
   }
 };
