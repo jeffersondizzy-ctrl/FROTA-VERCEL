@@ -1734,7 +1734,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
                         </button>
                       )
                     )}
-                    {currentUser === 'jeff' && (
+                    {canEdit && (
                       <button
                         onClick={(e) => handleDeleteGroup(group.id, e)}
                         className="w-6 h-6 rounded-full bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-colors"
