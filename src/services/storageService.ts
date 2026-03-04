@@ -157,27 +157,28 @@ export const storageService = {
   // --- CHECKLISTS ---
 
   async getChecklists() {
-    // Fallback to 'placa' if 'veiculo_atrelado' is causing issues as per user report
+    // Use 'veiculo_atrelado' as per user's earlier instruction that it's the real name
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
       .select('*')
-      .order('placa', { ascending: true });
+      .order('veiculo_atrelado', { ascending: true });
     
     if (error) {
       console.error('Error fetching checklists:', error);
       return [];
     }
+    // Map back to 'placa' for frontend compatibility if needed, 
+    // but we'll update the frontend to use 'veiculo_atrelado'
     return data || [];
   },
 
   async saveChecklist(checklist: any) {
     // Remove 'id' if present to avoid identity column issues
-    // Use 'placa' as the key
     const { id, ...rest } = checklist;
 
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
-      .upsert(rest, { onConflict: 'placa' })
+      .upsert(rest, { onConflict: 'veiculo_atrelado' })
       .select()
       .single();
     
@@ -188,14 +189,14 @@ export const storageService = {
     return data;
   },
 
-  async updateChecklistPartial(placa: string, updates: any) {
-    // Remove 'placa' and 'id' from updates
-    const { placa: _, id: __, ...cleanUpdates } = updates;
+  async updateChecklistPartial(veiculo_atrelado: string, updates: any) {
+    // Remove 'veiculo_atrelado' and 'id' from updates
+    const { veiculo_atrelado: _, id: __, ...cleanUpdates } = updates;
 
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
       .update(cleanUpdates)
-      .eq('placa', placa)
+      .eq('veiculo_atrelado', veiculo_atrelado)
       .select()
       .single();
     
@@ -206,11 +207,11 @@ export const storageService = {
     return data;
   },
 
-  async deleteChecklist(placa: string) {
+  async deleteChecklist(veiculo_atrelado: string) {
     const { error } = await supabase
       .from(TABLES.CHECKLISTS)
       .delete()
-      .eq('placa', placa);
+      .eq('veiculo_atrelado', veiculo_atrelado);
     
     if (error) {
       console.error('Error deleting checklist:', error);
@@ -224,7 +225,7 @@ export const storageService = {
     const { data, error } = await supabase
       .from(TABLES.NOTIFICATIONS)
       .select('*')
-      .order('timestamp', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(50);
     
     if (error) {
@@ -236,17 +237,22 @@ export const storageService = {
 
   async saveNotification(notification: any) {
     // Remove ID if it's auto-generated
-    const { id, ...rest } = notification;
+    const { id, timestamp, ...rest } = notification;
+    
+    // Map timestamp to created_at if needed
+    const payload = {
+      ...rest,
+      created_at: timestamp || new Date().toISOString()
+    };
     
     const { data, error } = await supabase
       .from(TABLES.NOTIFICATIONS)
-      .insert(rest)
+      .insert(payload)
       .select()
       .single();
     
     if (error) {
       console.error('Error saving notification:', error);
-      // Don't throw for notifications to avoid blocking main flow
       return null;
     }
     return data;

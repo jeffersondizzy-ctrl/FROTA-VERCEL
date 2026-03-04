@@ -16,7 +16,7 @@ interface AppNotification {
   id: string;
   type: 'success' | 'info' | 'warning' | 'danger' | 'neutral';
   message: string;
-  timestamp: string;
+  created_at: string;
   read: boolean;
   [key: string]: any; // Allow other properties to prevent crashes
 }
@@ -85,7 +85,7 @@ const addNotification = async (type: AppNotification['type'], message: string) =
   const newNotification = {
     type,
     message,
-    timestamp: new Date().toISOString(),
+    created_at: new Date().toISOString(),
     read: false
   };
   
@@ -698,7 +698,7 @@ function DashboardPage({ onNavigate, onLogout }: { onNavigate: (page: any) => vo
                 </div>
                 <div className="flex-1">
                   <p className="text-white text-[10px] font-bold uppercase tracking-wide leading-tight">{notif.message}</p>
-                  <p className="text-slate-500 text-[8px] mt-1 font-mono">{new Date(notif.timestamp).toLocaleTimeString('pt-BR')}</p>
+                  <p className="text-slate-500 text-[8px] mt-1 font-mono">{new Date(notif.created_at).toLocaleTimeString('pt-BR')}</p>
                 </div>
               </motion.div>
             ))
@@ -1168,7 +1168,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
 
   // Details View State
   const [escalaItems, setEscalaItems] = useState<EscalaItem[]>([]);
-  const [checklists, setChecklists] = useState<{ placa: string; status: string; validade: string | null; tipo: string }[]>([]);
+  const [checklists, setChecklists] = useState<{ veiculo_atrelado: string; status: string; validade: string | null; tipo_veiculo: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1344,7 +1344,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
     }
 
     const checklists = await storageService.getChecklists();
-    const checklistItem = checklists.find((c: any) => c.placa === cavaloUpper);
+    const checklistItem = checklists.find((c: any) => c.veiculo_atrelado === cavaloUpper);
     const checklistStatus = checklistItem ? getEffectiveStatus(checklistItem.status, checklistItem.validade) : 'Checklist OK';
 
     const newTempItem = {
@@ -1498,7 +1498,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
     try {
       setLoading(true);
       const checklists = await storageService.getChecklists();
-      const checklistItem = checklists.find((c: any) => c.placa === cavaloUpper);
+      const checklistItem = checklists.find((c: any) => c.veiculo_atrelado === cavaloUpper);
       const checklistStatus = checklistItem ? getEffectiveStatus(checklistItem.status, checklistItem.validade) : 'Checklist OK';
 
       const entryData = {
@@ -1830,10 +1830,10 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
                     value={cavalo}
                     onChange={(e) => setCavalo(e.target.value)}
                     options={checklists
-                      .filter(c => c.tipo === 'Cavalo' && !tempVehicles.some(v => v.cavalo === c.placa))
+                      .filter(c => c.tipo_veiculo === 'Cavalo' && !tempVehicles.some(v => v.cavalo === c.veiculo_atrelado))
                       .map(c => ({
-                        label: `${c.placa} [${getEffectiveStatus(c.status, c.validade)}]`,
-                        value: c.placa
+                        label: `${c.veiculo_atrelado} [${getEffectiveStatus(c.status, c.validade)}]`,
+                        value: c.veiculo_atrelado
                       }))}
                     placeholder="Selecione..."
                   />
@@ -1967,10 +1967,10 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
                     value={cavalo}
                     onChange={(e) => setCavalo(e.target.value)}
                     options={checklists
-                      .filter(c => c.tipo === 'Cavalo')
+                      .filter(c => c.tipo_veiculo === 'Cavalo')
                       .map(c => ({
-                        label: `${c.placa} [${getEffectiveStatus(c.status, c.validade)}]`,
-                        value: c.placa
+                        label: `${c.veiculo_atrelado} [${getEffectiveStatus(c.status, c.validade)}]`,
+                        value: c.veiculo_atrelado
                       }))}
                     placeholder="Selecione..."
                   />
@@ -2500,7 +2500,7 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
 
 function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void; currentUser: string }) {
   const canEdit = ['gr3c', 'jeff'].includes(currentUser);
-  const [checklists, setChecklists] = useState<{ placa: string; status: string; validade: string | null; tipo: string; created_at: string }[]>([]);
+  const [checklists, setChecklists] = useState<{ veiculo_atrelado: string; status: string; validade: string | null; tipo_veiculo: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedPlaca, setExpandedPlaca] = useState<string | null>(null);
@@ -2538,16 +2538,16 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
       setLoading(true);
       const currentList = await storageService.getChecklists();
 
-      if (currentList.some(item => item.placa === placaUpper)) {
+      if (currentList.some(item => item.veiculo_atrelado === placaUpper)) {
         alert('Esta placa já está registrada no sistema.');
         return;
       }
 
       const newItem = { 
-        placa: placaUpper, 
+        veiculo_atrelado: placaUpper, 
         status: 'Checklist OK', 
         validade: addValidade || null, 
-        tipo: addTipo,
+        tipo_veiculo: addTipo,
         created_at: new Date().toISOString()
       };
 
@@ -2573,7 +2573,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
           ...target, 
           status: newStatus, 
           validade: newValidade || null, 
-          tipo: newTipo 
+          tipo_veiculo: newTipo 
         };
         await storageService.saveChecklist(updated);
         fetchChecklists();
@@ -2596,7 +2596,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
       if (target) {
         // ATUALIZAÇÃO OTIMISTA: Remove da tela na hora!
         setChecklists(prev => prev.filter((_, i) => i !== index));
-        await storageService.deleteChecklist(target.placa);
+        await storageService.deleteChecklist(target.veiculo_atrelado);
       }
     } catch (error) {
       console.error('Failed to delete checklist:', error);
@@ -2678,7 +2678,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
         ) : (
           checklists.map((c, idx) => (
             <motion.div 
-              key={`${c.placa}-${idx}`}
+              key={`${c.veiculo_atrelado}-${idx}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.02 }}
@@ -2686,8 +2686,8 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
             >
               <div className="flex justify-between items-start mb-3">
                 <div className="flex flex-col">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">{c.tipo}</span>
-                  <span className="text-lg font-black text-white font-mono tracking-tighter">{c.placa}</span>
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">{c.tipo_veiculo}</span>
+                  <span className="text-lg font-black text-white font-mono tracking-tighter">{c.veiculo_atrelado}</span>
                 </div>
                 <div className="flex gap-1">
                   {canEdit && (
@@ -2696,7 +2696,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
                         setEditingIndex(idx);
                         setNewStatus(c.status);
                         setNewValidade(c.validade ? c.validade.split('T')[0] : '');
-                        setNewTipo(c.tipo);
+                        setNewTipo(c.tipo_veiculo);
                       }} className="p-1.5 bg-white/5 rounded-lg text-slate-500 hover:text-white transition-colors" title="Editar">
                         <Pencil size={12} />
                       </button>
