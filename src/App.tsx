@@ -2500,13 +2500,13 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
 
 function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void; currentUser: string }) {
   const canEdit = ['gr3c', 'jeff'].includes(currentUser);
-  const [checklists, setChecklists] = useState<{ placa: string; status: string; validade: string | null; tipo: string; created_at: string }[]>([]);
+  const [checklists, setChecklists] = useState<{ id?: number | string; placa: string; status: string; validade: string | null; tipo: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedPlaca, setExpandedPlaca] = useState<string | null>(null);
   
   // Edit state
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | string | null>(null);
   const [newStatus, setNewStatus] = useState('Checklist OK');
   const [newValidade, setNewValidade] = useState('');
   const [newTipo, setNewTipo] = useState('Cavalo');
@@ -2525,6 +2525,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
       setChecklists(data);
     } catch (error) {
       console.error('Failed to fetch checklists:', error);
+      alert('Erro ao carregar checklists.');
     } finally {
       setLoading(false);
     }
@@ -2534,6 +2535,11 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
     e.preventDefault();
     const placaUpper = addPlaca.toUpperCase().trim();
     
+    if (!placaUpper) {
+      alert('Por favor, informe a placa.');
+      return;
+    }
+
     try {
       setLoading(true);
       const currentList = await storageService.getChecklists();
@@ -2547,27 +2553,27 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
         placa: placaUpper, 
         status: 'Checklist OK', 
         validade: addValidade || null, 
-        tipo: addTipo,
-        created_at: new Date().toISOString()
+        tipo: addTipo
       };
 
       await storageService.saveChecklist(newItem);
-      fetchChecklists();
+      await fetchChecklists();
       setAddPlaca('');
       setAddValidade('');
       setShowAddForm(false);
+      alert('Veículo adicionado com sucesso!');
     } catch (error) {
       console.error('Failed to add vehicle to checklist:', error);
+      alert('Falha ao salvar veículo. Verifique os dados e tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdate = async (index: number) => {
+  const handleUpdate = async (id: number | string) => {
     try {
       setLoading(true);
-      const currentList = await storageService.getChecklists();
-      const target = currentList[index];
+      const target = checklists.find(c => (c.id === id || c.placa === id));
       if (target) {
         const updated = { 
           ...target, 
@@ -2576,30 +2582,30 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
           tipo: newTipo 
         };
         await storageService.saveChecklist(updated);
-        fetchChecklists();
+        await fetchChecklists();
+        setEditingId(null);
+        alert('Checklist atualizado com sucesso!');
       }
-      setEditingIndex(null);
     } catch (error) {
       console.error('Failed to update checklist:', error);
+      alert('Erro ao atualizar checklist.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteChecklist = async (index: number) => {
+  const handleDeleteChecklist = async (id: number | string) => {
     if (!window.confirm('Deseja realmente apagar este checklist?')) return;
     
     try {
       setLoading(true);
-      const currentList = await storageService.getChecklists();
-      const target = currentList[index];
-      if (target) {
-        // ATUALIZAÇÃO OTIMISTA: Remove da tela na hora!
-        setChecklists(prev => prev.filter((_, i) => i !== index));
-        await storageService.deleteChecklist(target.id || target.placa);
-      }
+      // ATUALIZAÇÃO OTIMISTA: Remove da tela na hora!
+      setChecklists(prev => prev.filter(c => c.id !== id && c.placa !== id));
+      await storageService.deleteChecklist(id);
+      alert('Checklist removido.');
     } catch (error) {
       console.error('Failed to delete checklist:', error);
+      alert('Erro ao excluir checklist.');
       fetchChecklists(); // Revert optimistic update
     } finally {
       setLoading(false);
@@ -2693,19 +2699,22 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
                   {canEdit && (
                     <>
                       <button onClick={() => {
-                        setEditingIndex(idx);
+                        setEditingId(c.id || c.placa);
                         setNewStatus(c.status);
                         setNewValidade(c.validade ? c.validade.split('T')[0] : '');
                         setNewTipo(c.tipo);
                       }} className="p-1.5 bg-white/5 rounded-lg text-slate-500 hover:text-white transition-colors" title="Editar">
                         <Pencil size={12} />
                       </button>
+                      <button onClick={() => handleDeleteChecklist(c.id || c.placa)} className="p-1.5 bg-white/5 rounded-lg text-rose-500/50 hover:text-rose-500 transition-colors" title="Excluir">
+                        <Trash2 size={12} />
+                      </button>
                     </>
                   )}
                 </div>
               </div>
 
-              {editingIndex === idx ? (
+              {editingId === (c.id || c.placa) ? (
                 <div className="space-y-2 pt-2 border-t border-white/5">
                   <SelectField 
                     label="Status Automático" 
@@ -2725,8 +2734,8 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
                     <input type="date" value={newValidade} onChange={e => setNewValidade(e.target.value)} className="h-8 px-2 bg-slate-900/50 border border-slate-300/20 rounded-lg text-white font-bold text-[10px] outline-none" />
                   </div>
                   <div className="flex gap-1.5">
-                    <button onClick={() => handleUpdate(idx)} className="flex-1 h-8 bg-emerald-500/20 text-emerald-500 rounded-lg font-black text-[9px] uppercase">OK</button>
-                    <button onClick={() => setEditingIndex(null)} className="h-8 px-2 bg-white/5 text-slate-500 rounded-lg font-black text-[9px] uppercase">X</button>
+                    <button onClick={() => handleUpdate(c.id || c.placa)} className="flex-1 h-8 bg-emerald-500/20 text-emerald-500 rounded-lg font-black text-[9px] uppercase">OK</button>
+                    <button onClick={() => setEditingId(null)} className="h-8 px-2 bg-white/5 text-slate-500 rounded-lg font-black text-[9px] uppercase">X</button>
                   </div>
                 </div>
               ) : (

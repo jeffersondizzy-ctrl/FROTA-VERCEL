@@ -76,20 +76,35 @@ export const storageService = {
   },
 
   async saveChecklist(checklist: any) {
-    const { id, created_at, ...rest } = checklist; 
-    const { data, error } = await supabase.from(TABLES.CHECKLISTS).insert([rest]).select().single();
-    if (error) throw error;
-    return data;
+    try {
+      if (checklist.id) return await this.updateChecklistPartial(checklist.id, checklist);
+      
+      const { id, created_at, ...rest } = checklist; 
+      const { data, error } = await supabase
+        .from(TABLES.CHECKLISTS)
+        .insert([rest])
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw error;
+      }
+      return data;
+    } catch (err) {
+      console.error('saveChecklist error:', err);
+      throw err;
+    }
   },
 
-  async updateChecklistPartial(id: string, updates: any) {
+  async updateChecklistPartial(id: number | string, updates: any) {
     const { id: _, created_at: __, ...cleanUpdates } = updates;
     const { data, error } = await supabase.from(TABLES.CHECKLISTS).update(cleanUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
 
-  async deleteChecklist(id: string) {
+  async deleteChecklist(id: number | string) {
     const { error } = await supabase.from(TABLES.CHECKLISTS).delete().eq('id', id);
     if (error) throw error;
   },
