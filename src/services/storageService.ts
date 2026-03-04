@@ -1,156 +1,246 @@
+import { supabase } from './supabase';
 
-const STORAGE_KEYS = {
-  GROUPS: 'frota_scale_groups',
-  ESCALA: 'frota_escala_items',
-  CHECKLISTS: 'frota_checklists',
-  NOTIFICATIONS: 'frota_notifications',
+const TABLES = {
+  GROUPS: 'scale_groups',
+  ESCALA: 'escala_items',
+  CHECKLISTS: 'checklists',
+  NOTIFICATIONS: 'notifications',
 };
 
-function getStorage<T>(key: string, defaultVal: T): T {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : defaultVal;
-  } catch (e) {
-    return defaultVal;
-  }
-}
-
-function setStorage(key: string, value: any) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-// Helper to simulate async behavior of Supabase
+// Helper to simulate async behavior if needed, but Supabase is already async
 const delay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const storageService = {
   async getScaleGroups() {
-    await delay();
-    return getStorage<any[]>(STORAGE_KEYS.GROUPS, []).sort((a, b) => b.id - a.id);
+    const { data, error } = await supabase
+      .from(TABLES.GROUPS)
+      .select('*')
+      .order('id', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching scale groups:', error);
+      return [];
+    }
+    return data || [];
   },
 
   async saveScaleGroup(group: any) {
-    await delay();
-    const groups = getStorage<any[]>(STORAGE_KEYS.GROUPS, []);
-    const index = groups.findIndex(g => g.id === group.id);
+    // Remove any fields that might not be in the schema if necessary, 
+    // but for now we assume the schema matches the object structure.
+    // If group.id exists, update. Otherwise insert.
     
-    if (index >= 0) {
-      groups[index] = { ...groups[index], ...group };
+    if (group.id) {
+      const { data, error } = await supabase
+        .from(TABLES.GROUPS)
+        .update(group)
+        .eq('id', group.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error updating scale group:', error);
+        throw error;
+      }
+      return data;
     } else {
-      // Auto-increment ID if not present (though usually passed from frontend for new items in this app context?)
-      // Looking at App.tsx, IDs seem to be handled. If not, we might need to generate one.
-      // For now, assume ID is present or we just push.
-      groups.push(group);
+      const { data, error } = await supabase
+        .from(TABLES.GROUPS)
+        .insert(group)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error inserting scale group:', error);
+        throw error;
+      }
+      return data;
     }
-    setStorage(STORAGE_KEYS.GROUPS, groups);
-    return group;
   },
 
   async deleteScaleGroup(id: number) {
-    await delay();
-    const groups = getStorage<any[]>(STORAGE_KEYS.GROUPS, []);
-    const filtered = groups.filter(g => g.id !== id);
-    setStorage(STORAGE_KEYS.GROUPS, filtered);
+    const { error } = await supabase
+      .from(TABLES.GROUPS)
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error deleting scale group:', error);
+      throw error;
+    }
   },
 
   async getEscalaItems() {
-    await delay();
-    return getStorage<any[]>(STORAGE_KEYS.ESCALA, []).sort((a, b) => b.id - a.id);
+    const { data, error } = await supabase
+      .from(TABLES.ESCALA)
+      .select('*')
+      .order('id', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching escala items:', error);
+      return [];
+    }
+    return data || [];
   },
 
   async saveEscalaItem(item: any) {
-    await delay();
-    const items = getStorage<any[]>(STORAGE_KEYS.ESCALA, []);
-    const index = items.findIndex(i => i.id === item.id);
-    
-    if (index >= 0) {
-      items[index] = { ...items[index], ...item };
+    if (item.id) {
+      const { data, error } = await supabase
+        .from(TABLES.ESCALA)
+        .update(item)
+        .eq('id', item.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error updating escala item:', error);
+        throw error;
+      }
+      return data;
     } else {
-      items.push(item);
+      const { data, error } = await supabase
+        .from(TABLES.ESCALA)
+        .insert(item)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error inserting escala item:', error);
+        throw error;
+      }
+      return data;
     }
-    setStorage(STORAGE_KEYS.ESCALA, items);
-    return item;
   },
 
   async saveEscalaItems(newItems: any[]) {
-    await delay();
-    const items = getStorage<any[]>(STORAGE_KEYS.ESCALA, []);
-    // Upsert logic
-    newItems.forEach(newItem => {
-      const index = items.findIndex(i => i.id === newItem.id);
-      if (index >= 0) {
-        items[index] = { ...items[index], ...newItem };
-      } else {
-        items.push(newItem);
-      }
-    });
-    setStorage(STORAGE_KEYS.ESCALA, items);
-    return newItems;
+    // Supabase upsert can handle batch operations
+    const { data, error } = await supabase
+      .from(TABLES.ESCALA)
+      .upsert(newItems, { onConflict: 'id' })
+      .select();
+    
+    if (error) {
+      console.error('Error saving escala items:', error);
+      throw error;
+    }
+    return data;
   },
 
   async deleteEscalaItem(id: number) {
-    await delay();
-    const items = getStorage<any[]>(STORAGE_KEYS.ESCALA, []);
-    const filtered = items.filter(i => i.id !== id);
-    setStorage(STORAGE_KEYS.ESCALA, filtered);
+    const { error } = await supabase
+      .from(TABLES.ESCALA)
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error deleting escala item:', error);
+      throw error;
+    }
   },
 
   async getChecklists() {
-    await delay();
-    return getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []).sort((a, b) => a.placa.localeCompare(b.placa));
+    const { data, error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .select('*')
+      .order('placa', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching checklists:', error);
+      return [];
+    }
+    // Map back to flat structure if we stored as { placa, data: {...} }
+    // But wait, if we store as JSONB in 'data' column, we need to merge 'placa' and 'data'.
+    // Or we can just store everything in columns if we defined them.
+    // In schema I defined 'placa' and 'data' (jsonb).
+    // So we need to unwrap.
+    return (data || []).map((row: any) => ({ ...row.data, placa: row.placa }));
   },
 
   async saveChecklist(checklist: any) {
-    await delay();
-    const checklists = getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []);
-    const index = checklists.findIndex(c => c.placa === checklist.placa);
+    // We need to separate placa from the rest of the data
+    const { placa, ...rest } = checklist;
     
-    if (index >= 0) {
-      checklists[index] = { ...checklists[index], ...checklist };
-    } else {
-      checklists.push(checklist);
+    const { data, error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .upsert({ placa, data: rest }, { onConflict: 'placa' })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error saving checklist:', error);
+      throw error;
     }
-    setStorage(STORAGE_KEYS.CHECKLISTS, checklists);
-    return checklist;
+    return { ...data.data, placa: data.placa };
   },
 
   async saveChecklists(newChecklists: any[]) {
-    await delay();
-    const checklists = getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []);
-    newChecklists.forEach(newItem => {
-      const index = checklists.findIndex(c => c.placa === newItem.placa);
-      if (index >= 0) {
-        checklists[index] = { ...checklists[index], ...newItem };
-      } else {
-        checklists.push(newItem);
-      }
+    const rows = newChecklists.map(checklist => {
+      const { placa, ...rest } = checklist;
+      return { placa, data: rest };
     });
-    setStorage(STORAGE_KEYS.CHECKLISTS, checklists);
-    return newChecklists;
+
+    const { data, error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .upsert(rows, { onConflict: 'placa' })
+      .select();
+    
+    if (error) {
+      console.error('Error saving checklists:', error);
+      throw error;
+    }
+    return (data || []).map((row: any) => ({ ...row.data, placa: row.placa }));
   },
 
   async deleteChecklist(placa: string) {
-    await delay();
-    const checklists = getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []);
-    const filtered = checklists.filter(c => c.placa !== placa);
-    setStorage(STORAGE_KEYS.CHECKLISTS, filtered);
+    const { error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .delete()
+      .eq('placa', placa);
+    
+    if (error) {
+      console.error('Error deleting checklist:', error);
+      throw error;
+    }
   },
 
   async getNotifications() {
-    await delay();
-    return getStorage<any[]>(STORAGE_KEYS.NOTIFICATIONS, []).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 50);
+    const { data, error } = await supabase
+      .from(TABLES.NOTIFICATIONS)
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .limit(50);
+    
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      return [];
+    }
+    return data || [];
   },
 
   async saveNotification(notification: any) {
-    await delay();
-    const notifications = getStorage<any[]>(STORAGE_KEYS.NOTIFICATIONS, []);
-    notifications.unshift(notification);
-    // Keep only last 50
-    const trimmed = notifications.slice(0, 50);
-    setStorage(STORAGE_KEYS.NOTIFICATIONS, trimmed);
+    const { data, error } = await supabase
+      .from(TABLES.NOTIFICATIONS)
+      .insert(notification)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error saving notification:', error);
+      throw error;
+    }
+    return data;
   },
 
   async clearNotifications() {
-    await delay();
-    setStorage(STORAGE_KEYS.NOTIFICATIONS, []);
+    // Delete all notifications
+    const { error } = await supabase
+      .from(TABLES.NOTIFICATIONS)
+      .delete()
+      .neq('id', '0'); // Hack to delete all rows, assuming id is not '0' or just use a condition that is always true
+      // Better: .delete().gt('timestamp', '1970-01-01')
+    
+    if (error) {
+      console.error('Error clearing notifications:', error);
+      throw error;
+    }
   }
 };
