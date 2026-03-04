@@ -1696,7 +1696,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
             <div className="col-span-full flex flex-col items-center justify-center py-16 gap-3 border border-dashed border-white/10 rounded-[2rem]">
               <Calendar size={40} className="text-white/10" />
               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Nenhuma escala encontrada.</p>
-              {activeTab === 'ativas' && <button onClick={() => setView('create')} className="text-coffee-red hover:underline text-[10px] font-bold uppercase tracking-widest">Criar a primeira escala</button>}
+              {canEdit && activeTab === 'ativas' && <button onClick={() => setView('create')} className="text-coffee-red hover:underline text-[10px] font-bold uppercase tracking-widest">Criar a primeira escala</button>}
             </div>
           ) : (
             scaleGroups.map(group => (
