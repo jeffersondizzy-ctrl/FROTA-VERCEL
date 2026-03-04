@@ -7,10 +7,9 @@ const TABLES = {
   NOTIFICATIONS: 'notifications',
 };
 
-// Helper to simulate async behavior if needed, but Supabase is already async
-const delay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
-
 export const storageService = {
+  // --- SCALE GROUPS ---
+
   async getScaleGroups() {
     const { data, error } = await supabase
       .from(TABLES.GROUPS)
@@ -25,21 +24,9 @@ export const storageService = {
   },
 
   async saveScaleGroup(group: any) {
+    // If it has an ID, use partial update to avoid identity column issues
     if (group.id) {
-      // Extract id to ensure it's not in the update body
-      const { id, ...updates } = group;
-      const { data, error } = await supabase
-        .from(TABLES.GROUPS)
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('Error updating scale group:', error);
-        throw error;
-      }
-      return data;
+      return this.updateScaleGroupPartial(group.id, group);
     } else {
       const { data, error } = await supabase
         .from(TABLES.GROUPS)
@@ -56,8 +43,9 @@ export const storageService = {
   },
 
   async updateScaleGroupPartial(id: number, updates: any) {
-    // Ensure id is not in updates
+    // CRITICAL: Remove 'id' from updates to prevent "cannot update identity column" error
     const { id: _, ...cleanUpdates } = updates;
+    
     const { data, error } = await supabase
       .from(TABLES.GROUPS)
       .update(cleanUpdates)
@@ -84,6 +72,8 @@ export const storageService = {
     }
   },
 
+  // --- ESCALA ITEMS ---
+
   async getEscalaItems() {
     const { data, error } = await supabase
       .from(TABLES.ESCALA)
@@ -99,18 +89,7 @@ export const storageService = {
 
   async saveEscalaItem(item: any) {
     if (item.id) {
-      const { data, error } = await supabase
-        .from(TABLES.ESCALA)
-        .update(item)
-        .eq('id', item.id)
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('Error updating escala item:', error);
-        throw error;
-      }
-      return data;
+      return this.updateEscalaItemPartial(item.id, item);
     } else {
       const { data, error } = await supabase
         .from(TABLES.ESCALA)
@@ -126,8 +105,25 @@ export const storageService = {
     }
   },
 
+  async updateEscalaItemPartial(id: number, updates: any) {
+    // CRITICAL: Remove 'id' from updates
+    const { id: _, ...cleanUpdates } = updates;
+
+    const { data, error } = await supabase
+      .from(TABLES.ESCALA)
+      .update(cleanUpdates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating escala item partial:', error);
+      throw error;
+    }
+    return data;
+  },
+
   async saveEscalaItems(newItems: any[]) {
-    // Supabase upsert can handle batch operations
     const { data, error } = await supabase
       .from(TABLES.ESCALA)
       .upsert(newItems, { onConflict: 'id' })
@@ -152,7 +148,10 @@ export const storageService = {
     }
   },
 
+  // --- CHECKLISTS ---
+
   async getChecklists() {
+    // Use 'veiculo_atrelado' as the column name
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
       .select('*')
@@ -162,17 +161,26 @@ export const storageService = {
       console.error('Error fetching checklists:', error);
       return [];
     }
-    // Map back to flat structure if we stored as { veiculo_atrelado, data: {...} }
-    return (data || []).map((row: any) => ({ ...row.data, placa: row.veiculo_atrelado }));
+    
+    // Map 'veiculo_atrelado' to 'placa' for frontend compatibility
+    return (data || []).map((row: any) => ({
+      ...row,
+      placa: row.veiculo_atrelado, 
+      ...(typeof row.data === 'object' ? row.data : {})
+    }));
   },
 
   async saveChecklist(checklist: any) {
-    // We need to separate placa from the rest of the data
-    const { placa, ...rest } = checklist;
-    
+    // Map 'placa' back to 'veiculo_atrelado'
+    const { placa, veiculo_atrelado, id, ...rest } = checklist;
+    const dbPayload = {
+      veiculo_atrelado: placa || veiculo_atrelado,
+      ...rest
+    };
+
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
-      .upsert({ veiculo_atrelado: placa, data: rest }, { onConflict: 'veiculo_atrelado' })
+      .upsert(dbPayload, { onConflict: 'veiculo_atrelado' })
       .select()
       .single();
     
@@ -180,25 +188,25 @@ export const storageService = {
       console.error('Error saving checklist:', error);
       throw error;
     }
-    return { ...data.data, placa: data.veiculo_atrelado };
+    return { ...data, placa: data.veiculo_atrelado };
   },
 
-  async saveChecklists(newChecklists: any[]) {
-    const rows = newChecklists.map(checklist => {
-      const { placa, ...rest } = checklist;
-      return { veiculo_atrelado: placa, data: rest };
-    });
+  async updateChecklistPartial(placa: string, updates: any) {
+    // Remove 'placa'/'veiculo_atrelado' from updates to avoid PK update issues
+    const { placa: _, veiculo_atrelado: __, ...cleanUpdates } = updates;
 
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
-      .upsert(rows, { onConflict: 'veiculo_atrelado' })
-      .select();
+      .update(cleanUpdates)
+      .eq('veiculo_atrelado', placa)
+      .select()
+      .single();
     
     if (error) {
-      console.error('Error saving checklists:', error);
+      console.error('Error updating checklist partial:', error);
       throw error;
     }
-    return (data || []).map((row: any) => ({ ...row.data, placa: row.veiculo_atrelado }));
+    return { ...data, placa: data.veiculo_atrelado };
   },
 
   async deleteChecklist(placa: string) {
@@ -213,63 +221,7 @@ export const storageService = {
     }
   },
 
-  async updateChecklistPartial(placa: string, updates: any) {
-    // Ensure we don't try to update the identity/PK column if it's included
-    const { veiculo_atrelado, ...rest } = updates;
-    
-    // If the updates are meant for the 'data' jsonb column, we might need to merge them
-    // But based on the user request, they want partial updates.
-    // However, the structure is { veiculo_atrelado, data: {...} }
-    // So if we update 'status', it should go into 'data'.
-    
-    // Fetch current data first to merge if necessary, or just update the 'data' column
-    // Supabase jsonb updates can be tricky. 
-    // Let's assume 'updates' contains fields that go into the 'data' column.
-    
-    // We need to get the current 'data' object to merge, or use jsonb_set (complex).
-    // Simpler approach: fetch, merge, update.
-    
-    const { data: current, error: fetchError } = await supabase
-      .from(TABLES.CHECKLISTS)
-      .select('data')
-      .eq('veiculo_atrelado', placa)
-      .single();
-      
-    if (fetchError) {
-       console.error('Error fetching checklist for partial update:', fetchError);
-       throw fetchError;
-    }
-    
-    const newData = { ...current.data, ...rest };
-    
-    const { data, error } = await supabase
-      .from(TABLES.CHECKLISTS)
-      .update({ data: newData })
-      .eq('veiculo_atrelado', placa)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating checklist partial:', error);
-      throw error;
-    }
-    return { ...data.data, placa: data.veiculo_atrelado };
-  },
-
-  async updateEscalaItemPartial(id: number, updates: any) {
-    const { data, error } = await supabase
-      .from(TABLES.ESCALA)
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating escala item partial:', error);
-      throw error;
-    }
-    return data;
-  },
+  // --- NOTIFICATIONS ---
 
   async getNotifications() {
     const { data, error } = await supabase
@@ -300,11 +252,10 @@ export const storageService = {
   },
 
   async clearNotifications() {
-    // Delete all notifications
     const { error } = await supabase
       .from(TABLES.NOTIFICATIONS)
       .delete()
-      .neq('id', '0'); 
+      .neq('id', '0'); // Delete all
     
     if (error) {
       console.error('Error clearing notifications:', error);

@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, ChangeEvent, useMemo, Fragment, useRef } from 'react';
-import { Truck, Plus, X, Calendar, Users, ChevronDown, ChevronUp, ChevronRight, CheckCircle, XCircle, AlertTriangle, Wrench, Home, MoveRight, Send, ChevronsLeft, ChevronsRight, Pencil, BookOpen, History, Ship, Archive, LayoutDashboard, PieChart as PieChartIcon, Search, Shield, Trash2, LogOut, MessageSquare, Lightbulb, Activity, FileText } from 'lucide-react';
+import { Truck, Plus, X, Calendar, Users, ChevronDown, ChevronUp, ChevronRight, CheckCircle, XCircle, AlertTriangle, Wrench, Home, MoveRight, Send, ChevronsLeft, ChevronsRight, Pencil, BookOpen, History, Ship, Archive, ArchiveRestore, LayoutDashboard, PieChart as PieChartIcon, Search, Shield, Trash2, LogOut, MessageSquare, Lightbulb, Activity, FileText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { storageService } from './services/storageService';
@@ -591,9 +591,13 @@ function DashboardPage({ onNavigate, onLogout }: { onNavigate: (page: any) => vo
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
-    const loadNotifications = () => {
-      const stored = getStorage<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, []);
-      setNotifications(stored.slice(0, 6));
+    const loadNotifications = async () => {
+      try {
+        const stored = await storageService.getNotifications();
+        setNotifications(stored.slice(0, 6));
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      }
     };
 
     loadNotifications();
@@ -1252,14 +1256,26 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
 
     try {
       setLoading(true);
-      const groups = await storageService.getScaleGroups();
-      const group = groups.find(g => g.id === groupId);
-      if (group) {
-        await storageService.saveScaleGroup({ ...group, status: 'Archived' });
-        fetchScaleGroups();
-      }
+      await storageService.updateScaleGroupPartial(groupId, { status: 'Archived' });
+      fetchScaleGroups();
     } catch (error) {
       console.error('Failed to archive scale:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnarchiveScale = async (e: any, groupId: number) => {
+    e.stopPropagation();
+    if (!window.confirm('Tem certeza que deseja desarquivar esta escala? Ela será movida para Escalas Ativas.')) return;
+
+    try {
+      setLoading(true);
+      await storageService.updateScaleGroupPartial(groupId, { status: 'Open' });
+      fetchScaleGroups();
+      setActiveTab('ativas');
+    } catch (error) {
+      console.error('Failed to unarchive scale:', error);
     } finally {
       setLoading(false);
     }
@@ -1393,14 +1409,10 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
     
     try {
       setLoading(true);
-      const groups = await storageService.getScaleGroups();
-      const group = groups.find(g => g.id === activeGroupId);
-      if (group) {
-        await storageService.saveScaleGroup({ ...group, status: 'Archived' });
-        alert('Escala arquivada com sucesso!');
-        setActiveTab('semanal');
-        setView('list');
-      }
+      await storageService.updateScaleGroupPartial(activeGroupId!, { status: 'Archived' });
+      alert('Escala arquivada com sucesso!');
+      setActiveTab('semanal');
+      setView('list');
     } catch (error) {
       console.error('Failed to archive group:', error);
       alert('Erro ao arquivar escala no servidor.');
@@ -1418,14 +1430,14 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
       // ATUALIZAÇÃO OTIMISTA: Remove da tela na hora!
       setScaleGroups(prev => prev.filter(group => group.id !== id));
 
-      await storageService.deleteScaleGroup(id);
-      
-      // Remove items associated with group
+      // Remove items associated with group FIRST
       const allItems = await storageService.getEscalaItems();
       const itemsToDelete = allItems.filter(i => i.scale_group_id === id);
       for (const item of itemsToDelete) {
         await storageService.deleteEscalaItem(item.id);
       }
+
+      await storageService.deleteScaleGroup(id);
       
       addNotification('success', 'Escala excluída com sucesso.');
     } catch (error) {
@@ -1691,13 +1703,34 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
                     <div className={`px-2.5 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest ${group.status === 'Archived' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
                       {group.status === 'Archived' ? 'Arquivado' : 'Em Aberto'}
                     </div>
-                    {group.status !== 'Archived' && canEdit && (
+                    {group.status === 'Archived' ? (
+                      canEdit && (
+                        <button
+                          onClick={(e) => handleUnarchiveScale(e, group.id)}
+                          className="w-6 h-6 rounded-full bg-white/5 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-500 flex items-center justify-center transition-colors"
+                          title="Desarquivar Escala"
+                        >
+                          <ArchiveRestore size={12} />
+                        </button>
+                      )
+                    ) : (
+                      canEdit && (
+                        <button
+                          onClick={(e) => handleArchiveScale(e, group.id)}
+                          className="w-6 h-6 rounded-full bg-white/5 hover:bg-amber-500/20 text-slate-400 hover:text-amber-500 flex items-center justify-center transition-colors"
+                          title="Arquivar Escala"
+                        >
+                          <Archive size={12} />
+                        </button>
+                      )
+                    )}
+                    {currentUser === 'jeff' && (
                       <button
-                        onClick={(e) => handleArchiveScale(e, group.id)}
-                        className="w-6 h-6 rounded-full bg-white/5 hover:bg-amber-500/20 text-slate-400 hover:text-amber-500 flex items-center justify-center transition-colors"
-                        title="Arquivar Escala"
+                        onClick={(e) => handleDeleteGroup(group.id, e)}
+                        className="w-6 h-6 rounded-full bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-colors"
+                        title="Excluir Permanentemente"
                       >
-                        <Archive size={12} />
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </div>
