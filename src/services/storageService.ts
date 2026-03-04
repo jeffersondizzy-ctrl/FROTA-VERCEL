@@ -25,10 +25,6 @@ export const storageService = {
   },
 
   async saveScaleGroup(group: any) {
-    // Remove any fields that might not be in the schema if necessary, 
-    // but for now we assume the schema matches the object structure.
-    // If group.id exists, update. Otherwise insert.
-    
     if (group.id) {
       const { data, error } = await supabase
         .from(TABLES.GROUPS)
@@ -141,18 +137,14 @@ export const storageService = {
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
       .select('*')
-      .order('placa', { ascending: true });
+      .order('veiculo_atrelado', { ascending: true });
     
     if (error) {
       console.error('Error fetching checklists:', error);
       return [];
     }
-    // Map back to flat structure if we stored as { placa, data: {...} }
-    // But wait, if we store as JSONB in 'data' column, we need to merge 'placa' and 'data'.
-    // Or we can just store everything in columns if we defined them.
-    // In schema I defined 'placa' and 'data' (jsonb).
-    // So we need to unwrap.
-    return (data || []).map((row: any) => ({ ...row.data, placa: row.placa }));
+    // Map back to flat structure if we stored as { veiculo_atrelado, data: {...} }
+    return (data || []).map((row: any) => ({ ...row.data, placa: row.veiculo_atrelado }));
   },
 
   async saveChecklist(checklist: any) {
@@ -161,7 +153,7 @@ export const storageService = {
     
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
-      .upsert({ placa, data: rest }, { onConflict: 'placa' })
+      .upsert({ veiculo_atrelado: placa, data: rest }, { onConflict: 'veiculo_atrelado' })
       .select()
       .single();
     
@@ -169,37 +161,52 @@ export const storageService = {
       console.error('Error saving checklist:', error);
       throw error;
     }
-    return { ...data.data, placa: data.placa };
+    return { ...data.data, placa: data.veiculo_atrelado };
   },
 
   async saveChecklists(newChecklists: any[]) {
     const rows = newChecklists.map(checklist => {
       const { placa, ...rest } = checklist;
-      return { placa, data: rest };
+      return { veiculo_atrelado: placa, data: rest };
     });
 
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
-      .upsert(rows, { onConflict: 'placa' })
+      .upsert(rows, { onConflict: 'veiculo_atrelado' })
       .select();
     
     if (error) {
       console.error('Error saving checklists:', error);
       throw error;
     }
-    return (data || []).map((row: any) => ({ ...row.data, placa: row.placa }));
+    return (data || []).map((row: any) => ({ ...row.data, placa: row.veiculo_atrelado }));
   },
 
   async deleteChecklist(placa: string) {
     const { error } = await supabase
       .from(TABLES.CHECKLISTS)
       .delete()
-      .eq('placa', placa);
+      .eq('veiculo_atrelado', placa);
     
     if (error) {
       console.error('Error deleting checklist:', error);
       throw error;
     }
+  },
+
+  async updateEscalaItemPartial(id: number, updates: any) {
+    const { data, error } = await supabase
+      .from(TABLES.ESCALA)
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating escala item partial:', error);
+      throw error;
+    }
+    return data;
   },
 
   async getNotifications() {
@@ -235,8 +242,7 @@ export const storageService = {
     const { error } = await supabase
       .from(TABLES.NOTIFICATIONS)
       .delete()
-      .neq('id', '0'); // Hack to delete all rows, assuming id is not '0' or just use a condition that is always true
-      // Better: .delete().gt('timestamp', '1970-01-01')
+      .neq('id', '0'); 
     
     if (error) {
       console.error('Error clearing notifications:', error);

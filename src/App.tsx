@@ -406,8 +406,7 @@ function VeiculosPage({ setPage, currentUser }: { setPage: (page: any) => void; 
       const allItems = await storageService.getEscalaItems();
       const item = allItems.find(i => i.id === id);
       if (item) {
-        const updatedItem = { ...item, [field]: status };
-        await storageService.saveEscalaItem(updatedItem);
+        await storageService.updateEscalaItemPartial(id, { [field]: status });
         fetchEscala();
       }
     } catch (error) {
