@@ -93,7 +93,20 @@ const addNotification = async (type: AppNotification['type'], message: string) =
   }
 };
 
+function getStorage<T>(key: string, defaultVal: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : defaultVal;
+  } catch (e) {
+    return defaultVal;
+  }
+}
 
+const setStorage = (key: string, value: any) => {
+  localStorage.setItem(key, JSON.stringify(value));
+};
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 
 
@@ -179,16 +192,12 @@ interface BauExpedicao {
   turno: Turno;
 }
 
-import { supabase } from './services/supabase';
-
 // --- AUTHENTICATION ---
-// Roles mapping (username -> role)
-// Passwords are now handled by Supabase Auth
-const USER_ROLES: Record<string, string> = {
-  '3cmot': 'veiculos',
-  'gr3c': 'checklist_escala',
-  '3clog': 'docas',
-  'jeff': 'admin',
+const USERS: Record<string, { password: string; role: string }> = {
+  '3cmot': { password: 'frota3c28', role: 'veiculos' },
+  'gr3c': { password: 'grsantaluzia3c7', role: 'checklist_escala' },
+  '3clog': { password: 'grlogistica', role: 'docas' },
+  'jeff': { password: '#trescafe27', role: 'admin' },
 };
 
 // --- MAIN APP COMPONENT ---
@@ -196,33 +205,6 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [page, setPage] = useState<'dashboard' | 'escala' | 'principios' | 'checklist' | 'veiculos' | 'docas' | 'chat' | 'sobre' | 'recebimento'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-
-  useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        // Extract username from email (e.g. 3cmot@frota.local -> 3cmot)
-        const username = session.user.email.split('@')[0];
-        setCurrentUser(username);
-      }
-      setLoadingAuth(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) {
-        const username = session.user.email.split('@')[0];
-        setCurrentUser(username);
-      } else {
-        setCurrentUser(null);
-      }
-      setLoadingAuth(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   useEffect(() => {
     // One-time cleanup for test data
@@ -233,7 +215,7 @@ export default function App() {
       localStorage.removeItem(STORAGE_KEYS.CHECKLISTS);
       localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
       localStorage.setItem('frota_cleared_v2', 'true');
-      // window.location.reload(); // Removed reload to prevent loops
+      window.location.reload();
     }
 
     // Clear notifications every 15 minutes
@@ -252,7 +234,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case 'dashboard':
-        return <DashboardPage onNavigate={setPage} onLogout={handleLogout} />;
+        return <DashboardPage onNavigate={setPage} onLogout={() => setCurrentUser(null)} />;
       case 'escala':
         return <EscalaPage setPage={setPage} currentUser={currentUser!} />;
       case 'veiculos':
@@ -270,22 +252,9 @@ export default function App() {
       case 'sobre':
         return <SobrePage setPage={setPage} />;
       default:
-        return <DashboardPage onNavigate={setPage} onLogout={handleLogout} />;
+        return <DashboardPage onNavigate={setPage} onLogout={() => setCurrentUser(null)} />;
     }
   };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-  };
-
-  if (loadingAuth) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   if (!currentUser) {
     return <LoginPage onLoginSuccess={(user) => setCurrentUser(user)} />;
@@ -299,7 +268,7 @@ export default function App() {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         currentUser={currentUser}
-        onLogout={handleLogout}
+        onLogout={() => setCurrentUser(null)}
       />
       <main className="flex-1 flex flex-col relative">
         <AnimatePresence mode="wait">
@@ -325,40 +294,16 @@ function LoginPage({ onLoginSuccess }: { onLoginSuccess: (user: string) => void 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: FormEvent) => {
+  const handleLogin = (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      // Append domain to username to form email
-      const email = `${username}@frota.local`;
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        // If login fails, check if we should try to register (First time setup helper)
-        if (error.message.includes('Invalid login credentials')) {
-             setError('Credenciais inválidas. Verifique usuário e senha.');
-        } else {
-             setError(error.message);
-        }
-      } else {
-        // Success handled by onAuthStateChange in App component
-      }
-    } catch (err) {
-      setError('Ocorreu um erro ao tentar fazer login.');
-      console.error(err);
-    } finally {
-      setLoading(false);
+    const user = USERS[username];
+    if (user && user.password === password) {
+      onLoginSuccess(username);
+    } else {
+      setError('Credenciais inválidas. Tente novamente.');
     }
   };
-
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
@@ -647,8 +592,8 @@ function DashboardPage({ onNavigate, onLogout }: { onNavigate: (page: any) => vo
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
-    const loadNotifications = async () => {
-      const stored = await storageService.getNotifications();
+    const loadNotifications = () => {
+      const stored = getStorage<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, []);
       setNotifications(stored.slice(0, 6));
     };
 
@@ -2225,7 +2170,9 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
   };
 
   const handleToggleAtrelado = async (val: 'Sim' | 'Não') => {
-    await storageService.saveEscalaItem({ ...item, veiculo_atrelado: val });
+    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
+    const updatedItems = allItems.map(i => i.id === item.id ? { ...i, veiculo_atrelado: val } : i);
+    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
     if (val === 'Sim') {
       addNotification('info', `Veículo ${item.cavalo} atrelado e movido para Checklist Vencido`);
       alert(`Veículo ${item.cavalo} atrelado! Pendência enviada para a aba Checklist Vencido.`);
@@ -2234,7 +2181,9 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
   };
 
   const handleToggleChecklistRealizado = async (val: 'Sim' | 'Não') => {
-    await storageService.saveEscalaItem({ ...item, checklist_realizado: val });
+    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
+    const updatedItems = allItems.map(i => i.id === item.id ? { ...i, checklist_realizado: val } : i);
+    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
     onUpdate();
   };
 
@@ -2245,14 +2194,18 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
     // ATUALIZAÇÃO OTIMISTA: Remove o veículo da tela na hora!
     onOptimisticRemove(item.id);
     
-    await storageService.deleteEscalaItem(item.id);
+    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
+    const updatedItems = allItems.filter(i => i.id !== item.id);
+    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
   };
 
   const handleArchiveItem = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm('Deseja arquivar este veículo para a escala semanal?')) return;
     
-    await storageService.saveEscalaItem({ ...item, saved: true });
+    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
+    const updatedItems = allItems.map(i => i.id === item.id ? { ...i, saved: true } : i);
+    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
     onUpdate();
   };
 
@@ -2392,8 +2345,12 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
                           
                           <button
                               disabled={!negativadoAction}
-                              onClick={async () => {
+                              onClick={() => {
                                   // Lógica de salvar Negativado
+                                  const allChecklists = getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []);
+                                  const existingIndex = allChecklists.findIndex(c => c.placa === item.cavalo);
+                                  let newChecklists = [...allChecklists];
+                                  
                                   const newStatus = `Negativado - ${negativadoAction}`;
                                   
                                   const checklistItem = {
@@ -2404,10 +2361,18 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
                                       created_at: new Date().toISOString()
                                   };
 
-                                  await storageService.saveChecklist(checklistItem);
+                                  if (existingIndex >= 0) {
+                                      newChecklists[existingIndex] = { ...newChecklists[existingIndex], ...checklistItem };
+                                  } else {
+                                      newChecklists.push(checklistItem);
+                                  }
+                                  
+                                  setStorage(STORAGE_KEYS.CHECKLISTS, newChecklists);
                                   
                                   // Atualizar Escala
-                                  await storageService.saveEscalaItem({ ...item, checklist_status: newStatus });
+                                  const allEscala = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
+                                  const updatedEscala = allEscala.map(i => i.id === item.id ? { ...i, checklist_status: newStatus } : i);
+                                  setStorage(STORAGE_KEYS.ESCALA, updatedEscala);
                                   
                                   addNotification('danger', `Checklist Negativado: ${item.cavalo} - ${newStatus}`);
                                   alert(`Status atualizado para: ${newStatus}`);
@@ -2438,8 +2403,12 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
                           
                           <button
                               disabled={!newValidade}
-                              onClick={async () => {
+                              onClick={() => {
                                   // Lógica de salvar Checklist OK
+                                  const allChecklists = getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []);
+                                  const existingIndex = allChecklists.findIndex(c => c.placa === item.cavalo);
+                                  let newChecklists = [...allChecklists];
+                                  
                                   const checklistItem = {
                                       placa: item.cavalo,
                                       status: 'Checklist OK',
@@ -2448,10 +2417,18 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
                                       created_at: new Date().toISOString()
                                   };
 
-                                  await storageService.saveChecklist(checklistItem);
+                                  if (existingIndex >= 0) {
+                                      newChecklists[existingIndex] = { ...newChecklists[existingIndex], ...checklistItem };
+                                  } else {
+                                      newChecklists.push(checklistItem);
+                                  }
+                                  
+                                  setStorage(STORAGE_KEYS.CHECKLISTS, newChecklists);
                                   
                                   // Atualizar Escala
-                                  await storageService.saveEscalaItem({ ...item, checklist_status: 'Checklist OK', veiculo_atrelado: 'Não' });
+                                  const allEscala = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
+                                  const updatedEscala = allEscala.map(i => i.id === item.id ? { ...i, checklist_status: 'Checklist OK', veiculo_atrelado: 'Não' } : i);
+                                  setStorage(STORAGE_KEYS.ESCALA, updatedEscala);
                                   
                                   addNotification('success', `Checklist OK: ${item.cavalo} - Validade ${new Date(newValidade).toLocaleDateString('pt-BR')}`);
                                   alert(`Checklist atualizado para OK com validade ${new Date(newValidade).toLocaleDateString('pt-BR')}!`);
