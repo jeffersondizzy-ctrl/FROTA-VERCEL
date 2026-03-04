@@ -198,6 +198,15 @@ const USERS: Record<string, { password: string; role: string }> = {
   'gr3c': { password: 'grsantaluzia3c7', role: 'checklist_escala' },
   '3clog': { password: 'grlogistica', role: 'docas' },
   'jeff': { password: '#trescafe27', role: 'admin' },
+  'supervisor3c': { password: '3coracoeslogistica', role: 'docas' },
+};
+
+const USER_DISPLAY_NAMES: Record<string, string> = {
+  '3clog': 'Lider',
+  '3cmot': 'Motorista',
+  'gr3c': 'GR',
+  'jeff': 'fundador',
+  'supervisor3c': 'Lider',
 };
 
 // --- MAIN APP COMPONENT ---
@@ -954,8 +963,9 @@ const ExpedicaoShiftChart = ({ data }: { data: FrotaItem[] }) => {
 };
 
 function ChatPage({ setPage, currentUser }: { setPage: (page: any) => void; currentUser: string }) {
+  const displayName = USER_DISPLAY_NAMES[currentUser] || currentUser;
   const [messages, setMessages] = useState<{ id: number; user: string; text: string; time: string; isMe: boolean }[]>([
-    { id: 1, user: 'Sistema', text: `Bem-vindo ao chat, ${currentUser}!`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isMe: false }
+    { id: 1, user: 'Sistema', text: `Bem-vindo ao chat, ${displayName}!`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isMe: false }
   ]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -972,7 +982,7 @@ function ChatPage({ setPage, currentUser }: { setPage: (page: any) => void; curr
 
     const msg = {
       id: Date.now(),
-      user: currentUser,
+      user: displayName,
       text: newMessage,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isMe: true
