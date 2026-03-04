@@ -18,66 +18,71 @@ interface AppNotification {
   message: string;
   timestamp: string;
   read: boolean;
+  [key: string]: any; // Allow other properties to prevent crashes
 }
 
 const playNotificationSound = (type: 'success' | 'info' | 'warning' | 'danger' | 'neutral') => {
-  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-  if (!AudioContext) return;
-  const ctx = new AudioContext();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.connect(gain);
-  gain.connect(ctx.destination);
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
 
-  const now = ctx.currentTime;
+    const now = ctx.currentTime;
 
-  if (type === 'success') {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(500, now);
-    osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
-    gain.gain.setValueAtTime(0.1, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc.start(now);
-    osc.stop(now + 0.5);
-  } else if (type === 'danger') {
-    // Alarm
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(100, now);
-    osc.frequency.linearRampToValueAtTime(800, now + 0.1);
-    osc.frequency.linearRampToValueAtTime(100, now + 0.2);
-    osc.frequency.linearRampToValueAtTime(800, now + 0.3);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
-    osc.start(now);
-    osc.stop(now + 0.6);
-  } else if (type === 'warning') {
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(300, now);
-    gain.gain.setValueAtTime(0.1, now);
-    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
-    osc.start(now);
-    osc.stop(now + 0.3);
-  } else if (type === 'info') {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(800, now);
-    gain.gain.setValueAtTime(0.05, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-    osc.start(now);
-    osc.stop(now + 0.2);
-  } else {
-    // Neutral
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(200, now);
-    gain.gain.setValueAtTime(0.05, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-    osc.start(now);
-    osc.stop(now + 0.1);
+    if (type === 'success') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(500, now);
+      osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+      osc.start(now);
+      osc.stop(now + 0.5);
+    } else if (type === 'danger') {
+      // Alarm
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(100, now);
+      osc.frequency.linearRampToValueAtTime(800, now + 0.1);
+      osc.frequency.linearRampToValueAtTime(100, now + 0.2);
+      osc.frequency.linearRampToValueAtTime(800, now + 0.3);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
+      osc.start(now);
+      osc.stop(now + 0.6);
+    } else if (type === 'warning') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(300, now);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } else if (type === 'info') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now);
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } else {
+      // Neutral
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(200, now);
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+      osc.start(now);
+      osc.stop(now + 0.1);
+    }
+  } catch (e) {
+    console.error('Audio context error', e);
   }
 };
 
 const addNotification = async (type: AppNotification['type'], message: string) => {
-  const newNotification: AppNotification = {
-    id: Date.now().toString(),
+  // Ensure we don't send ID to DB, let DB generate it or use timestamp if needed
+  const newNotification = {
     type,
     message,
     timestamp: new Date().toISOString(),
@@ -3135,6 +3140,7 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
       
       const isFullyFinished = bau1Fin && bau2Fin;
 
+      // Ensure we use the partial update function which strips ID
       await storageService.updateEscalaItemPartial(id, updates);
       
       if (isFullyFinished) {
