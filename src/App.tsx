@@ -2202,43 +2202,51 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
   };
 
   const handleToggleAtrelado = async (val: 'Sim' | 'Não') => {
-    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
-    const updatedItems = allItems.map(i => i.id === item.id ? { ...i, veiculo_atrelado: val } : i);
-    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
-    if (val === 'Sim') {
-      addNotification('info', `Veículo ${item.cavalo} atrelado e movido para Checklist Vencido`);
-      alert(`Veículo ${item.cavalo} atrelado! Pendência enviada para a aba Checklist Vencido.`);
+    try {
+      await storageService.updateEscalaItemPartial(item.id, { veiculo_atrelado: val });
+      if (val === 'Sim') {
+        addNotification('info', `Veículo ${item.cavalo} atrelado e movido para Checklist Vencido`);
+        alert(`Veículo ${item.cavalo} atrelado! Pendência enviada para a aba Checklist Vencido.`);
+      }
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to update atrelado:', error);
     }
-    onUpdate();
   };
 
   const handleToggleChecklistRealizado = async (val: 'Sim' | 'Não') => {
-    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
-    const updatedItems = allItems.map(i => i.id === item.id ? { ...i, checklist_realizado: val } : i);
-    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
-    onUpdate();
+    try {
+      await storageService.updateEscalaItemPartial(item.id, { checklist_realizado: val });
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to update checklist realizado:', error);
+    }
   };
 
   const handleDeleteItem = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm('Deseja apagar este veículo da escala?')) return;
     
-    // ATUALIZAÇÃO OTIMISTA: Remove o veículo da tela na hora!
-    onOptimisticRemove(item.id);
-    
-    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
-    const updatedItems = allItems.filter(i => i.id !== item.id);
-    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
+    try {
+      // ATUALIZAÇÃO OTIMISTA: Remove o veículo da tela na hora!
+      onOptimisticRemove(item.id);
+      await storageService.deleteEscalaItem(item.id);
+    } catch (error) {
+      console.error('Failed to delete item:', error);
+      onUpdate(); // Revert optimistic update on error
+    }
   };
 
   const handleArchiveItem = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm('Deseja arquivar este veículo para a escala semanal?')) return;
     
-    const allItems = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
-    const updatedItems = allItems.map(i => i.id === item.id ? { ...i, saved: true } : i);
-    setStorage(STORAGE_KEYS.ESCALA, updatedItems);
-    onUpdate();
+    try {
+      await storageService.updateEscalaItemPartial(item.id, { saved: true });
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to archive item:', error);
+    }
   };
 
   if (item.saved && activeTab === 'ativas') return null; // Don't show saved items in main list
@@ -2377,38 +2385,32 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
                           
                           <button
                               disabled={!negativadoAction}
-                              onClick={() => {
-                                  // Lógica de salvar Negativado
-                                  const allChecklists = getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []);
-                                  const existingIndex = allChecklists.findIndex(c => c.placa === item.cavalo);
-                                  let newChecklists = [...allChecklists];
-                                  
-                                  const newStatus = `Negativado - ${negativadoAction}`;
-                                  
-                                  const checklistItem = {
+                              onClick={async () => {
+                                  try {
+                                    // Lógica de salvar Negativado
+                                    const newStatus = `Negativado - ${negativadoAction}`;
+                                    
+                                    // 1. Atualizar Tabela de Checklists
+                                    await storageService.saveChecklist({
                                       placa: item.cavalo,
                                       status: newStatus,
                                       validade: null,
                                       tipo: 'Cavalo',
                                       created_at: new Date().toISOString()
-                                  };
-
-                                  if (existingIndex >= 0) {
-                                      newChecklists[existingIndex] = { ...newChecklists[existingIndex], ...checklistItem };
-                                  } else {
-                                      newChecklists.push(checklistItem);
+                                    });
+                                    
+                                    // 2. Atualizar Item da Escala
+                                    await storageService.updateEscalaItemPartial(item.id, { 
+                                      checklist_status: newStatus 
+                                    });
+                                    
+                                    addNotification('danger', `Checklist Negativado: ${item.cavalo} - ${newStatus}`);
+                                    alert(`Status atualizado para: ${newStatus}`);
+                                    onUpdate();
+                                  } catch (error) {
+                                    console.error('Failed to save negativado:', error);
+                                    alert('Erro ao salvar status negativado.');
                                   }
-                                  
-                                  setStorage(STORAGE_KEYS.CHECKLISTS, newChecklists);
-                                  
-                                  // Atualizar Escala
-                                  const allEscala = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
-                                  const updatedEscala = allEscala.map(i => i.id === item.id ? { ...i, checklist_status: newStatus } : i);
-                                  setStorage(STORAGE_KEYS.ESCALA, updatedEscala);
-                                  
-                                  addNotification('danger', `Checklist Negativado: ${item.cavalo} - ${newStatus}`);
-                                  alert(`Status atualizado para: ${newStatus}`);
-                                  onUpdate();
                               }}
                               className="w-full h-9 bg-rose-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
@@ -2435,36 +2437,31 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
                           
                           <button
                               disabled={!newValidade}
-                              onClick={() => {
-                                  // Lógica de salvar Checklist OK
-                                  const allChecklists = getStorage<any[]>(STORAGE_KEYS.CHECKLISTS, []);
-                                  const existingIndex = allChecklists.findIndex(c => c.placa === item.cavalo);
-                                  let newChecklists = [...allChecklists];
-                                  
-                                  const checklistItem = {
+                              onClick={async () => {
+                                  try {
+                                    // Lógica de salvar Checklist OK
+                                    // 1. Atualizar Tabela de Checklists
+                                    await storageService.saveChecklist({
                                       placa: item.cavalo,
                                       status: 'Checklist OK',
                                       validade: newValidade,
                                       tipo: 'Cavalo',
                                       created_at: new Date().toISOString()
-                                  };
-
-                                  if (existingIndex >= 0) {
-                                      newChecklists[existingIndex] = { ...newChecklists[existingIndex], ...checklistItem };
-                                  } else {
-                                      newChecklists.push(checklistItem);
+                                    });
+                                    
+                                    // 2. Atualizar Item da Escala
+                                    await storageService.updateEscalaItemPartial(item.id, { 
+                                      checklist_status: 'Checklist OK', 
+                                      veiculo_atrelado: 'Não' 
+                                    });
+                                    
+                                    addNotification('success', `Checklist OK: ${item.cavalo} - Validade ${new Date(newValidade).toLocaleDateString('pt-BR')}`);
+                                    alert(`Checklist atualizado para OK com validade ${new Date(newValidade).toLocaleDateString('pt-BR')}!`);
+                                    onUpdate();
+                                  } catch (error) {
+                                    console.error('Failed to save checklist OK:', error);
+                                    alert('Erro ao salvar checklist OK.');
                                   }
-                                  
-                                  setStorage(STORAGE_KEYS.CHECKLISTS, newChecklists);
-                                  
-                                  // Atualizar Escala
-                                  const allEscala = getStorage<EscalaItem[]>(STORAGE_KEYS.ESCALA, []);
-                                  const updatedEscala = allEscala.map(i => i.id === item.id ? { ...i, checklist_status: 'Checklist OK', veiculo_atrelado: 'Não' } : i);
-                                  setStorage(STORAGE_KEYS.ESCALA, updatedEscala);
-                                  
-                                  addNotification('success', `Checklist OK: ${item.cavalo} - Validade ${new Date(newValidade).toLocaleDateString('pt-BR')}`);
-                                  alert(`Checklist atualizado para OK com validade ${new Date(newValidade).toLocaleDateString('pt-BR')}!`);
-                                  onUpdate();
                               }}
                               className="w-full h-9 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
