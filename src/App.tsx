@@ -3052,17 +3052,16 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
         }
       }
 
-      let isFullyFinished = false;
       let targetItem = allItems.find(i => i.id === id);
       if (!targetItem) return;
 
-      let newItem = { ...targetItem, [field]: value };
+      let updates: any = { [field]: value };
       
       // Logic for "Stage" -> "Expedição"
       if (viewMode === 'stage' && field.endsWith('_final_status') && value === 'Veículo Descarregado') {
         const bauPrefix = field.split('_')[0]; // bau1 or bau2
-        newItem = {
-          ...newItem,
+        updates = {
+          ...updates,
           [`${bauPrefix}_yard_status`]: 'Vazio',
           [`${bauPrefix}_final_status`]: '',
           [`${bauPrefix}_doca_action`]: '',
@@ -3073,8 +3072,8 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
       // Logic for "Expedição" -> "Stage"
       if (viewMode === 'expedicao' && field.endsWith('_final_status') && value === 'Precisa Descarregar') {
         const bauPrefix = field.split('_')[0]; // bau1 or bau2
-        newItem = {
-          ...newItem,
+        updates = {
+          ...updates,
           [`${bauPrefix}_yard_status`]: 'Carregado com Produto',
           [`${bauPrefix}_final_status`]: '',
           [`${bauPrefix}_doca_action`]: 'Descarregar',
@@ -3085,18 +3084,18 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
         const groups = await storageService.getScaleGroups();
         const group = groups.find(g => g.id === targetItem!.scale_group_id);
         if (group) {
-          await storageService.saveScaleGroup({ ...group, status: 'Open' });
+          await storageService.updateScaleGroupPartial(group.id, { status: 'Open' });
         }
       }
 
-      const bau1Fin = newItem.bau1_final_status === 'Veículo Descarregado' || newItem.bau1_final_status === 'Veículo Finalizado';
-      const bau2Fin = newItem.bau2 ? (newItem.bau2_final_status === 'Veículo Descarregado' || newItem.bau2_final_status === 'Veículo Finalizado') : true;
+      // Calculate finished status based on current item + updates
+      const simulatedItem = { ...targetItem, ...updates };
+      const bau1Fin = simulatedItem.bau1_final_status === 'Veículo Descarregado' || simulatedItem.bau1_final_status === 'Veículo Finalizado';
+      const bau2Fin = simulatedItem.bau2 ? (simulatedItem.bau2_final_status === 'Veículo Descarregado' || simulatedItem.bau2_final_status === 'Veículo Finalizado') : true;
       
-      if (bau1Fin && bau2Fin) {
-        isFullyFinished = true;
-      }
+      const isFullyFinished = bau1Fin && bau2Fin;
 
-      await storageService.saveEscalaItem(newItem);
+      await storageService.updateEscalaItemPartial(id, updates);
       
       if (isFullyFinished) {
         addNotification('success', `Veículo ${id} finalizado e movido para Histórico`);
@@ -3116,13 +3115,13 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
           const groups = await storageService.getScaleGroups();
           const group = groups.find(g => g.id === scaleGroupId);
           if (group) {
-            await storageService.saveScaleGroup({ ...group, status: 'Archived' });
+            await storageService.updateScaleGroupPartial(group.id, { status: 'Archived' });
             addNotification('info', `Escala de ${new Date(allScaleItems[0].data_escala || '').toLocaleDateString('pt-BR')} arquivada automaticamente.`);
           }
         }
       } else {
         if (field.includes('doca_number')) {
-          addNotification('neutral', `Veículo ${newItem.cavalo} atribuído à Doca ${value}`);
+          addNotification('neutral', `Veículo ${targetItem.cavalo} atribuído à Doca ${value}`);
         }
       }
       
@@ -3143,8 +3142,7 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
       const targetItem = allItems.find(item => item.id === id);
       if (targetItem) {
         scaleGroupId = targetItem.scale_group_id;
-        const updatedItem = {
-          ...targetItem,
+        const updates = {
           bau1_yard_status: 'Carregado com Produto',
           bau1_final_status: '',
           bau1_doca_action: 'Descarregar',
@@ -3154,14 +3152,14 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
           bau2_doca_action: targetItem.bau2 ? 'Descarregar' : '',
           bau2_doca_number: targetItem.bau2 ? '' : ''
         };
-        await storageService.saveEscalaItem(updatedItem);
+        await storageService.updateEscalaItemPartial(id, updates);
       }
       
       if (scaleGroupId !== null) {
         const groups = await storageService.getScaleGroups();
         const group = groups.find(g => g.id === scaleGroupId);
         if (group) {
-          await storageService.saveScaleGroup({ ...group, status: 'Open' });
+          await storageService.updateScaleGroupPartial(group.id, { status: 'Open' });
         }
       }
       
@@ -3178,23 +3176,18 @@ function DocasPage({ setPage, currentUser }: { setPage: (page: any) => void; cur
     
     try {
       setLoading(true);
-      const allItems = await storageService.getEscalaItems();
-      const targetItem = allItems.find(i => i.id === id);
-      if (targetItem) {
-        const updatedItem = {
-          ...targetItem,
-          bau1_yard_status: '', 
-          bau2_yard_status: '',
-          bau1_doca_action: '',
-          bau1_doca_number: '',
-          bau1_final_status: '',
-          bau2_doca_action: '',
-          bau2_doca_number: '',
-          bau2_final_status: ''
-        };
-        await storageService.saveEscalaItem(updatedItem);
-        fetchDocas();
-      }
+      const updates = {
+        bau1_yard_status: '', 
+        bau2_yard_status: '',
+        bau1_doca_action: '',
+        bau1_doca_number: '',
+        bau1_final_status: '',
+        bau2_doca_action: '',
+        bau2_doca_number: '',
+        bau2_final_status: ''
+      };
+      await storageService.updateEscalaItemPartial(id, updates);
+      fetchDocas();
     } catch (error) {
       console.error('Failed to remove vehicle from docas:', error);
     } finally {

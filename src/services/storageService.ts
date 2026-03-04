@@ -26,10 +26,12 @@ export const storageService = {
 
   async saveScaleGroup(group: any) {
     if (group.id) {
+      // Extract id to ensure it's not in the update body
+      const { id, ...updates } = group;
       const { data, error } = await supabase
         .from(TABLES.GROUPS)
-        .update(group)
-        .eq('id', group.id)
+        .update(updates)
+        .eq('id', id)
         .select()
         .single();
       
@@ -51,6 +53,23 @@ export const storageService = {
       }
       return data;
     }
+  },
+
+  async updateScaleGroupPartial(id: number, updates: any) {
+    // Ensure id is not in updates
+    const { id: _, ...cleanUpdates } = updates;
+    const { data, error } = await supabase
+      .from(TABLES.GROUPS)
+      .update(cleanUpdates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating scale group partial:', error);
+      throw error;
+    }
+    return data;
   },
 
   async deleteScaleGroup(id: number) {
@@ -192,6 +211,49 @@ export const storageService = {
       console.error('Error deleting checklist:', error);
       throw error;
     }
+  },
+
+  async updateChecklistPartial(placa: string, updates: any) {
+    // Ensure we don't try to update the identity/PK column if it's included
+    const { veiculo_atrelado, ...rest } = updates;
+    
+    // If the updates are meant for the 'data' jsonb column, we might need to merge them
+    // But based on the user request, they want partial updates.
+    // However, the structure is { veiculo_atrelado, data: {...} }
+    // So if we update 'status', it should go into 'data'.
+    
+    // Fetch current data first to merge if necessary, or just update the 'data' column
+    // Supabase jsonb updates can be tricky. 
+    // Let's assume 'updates' contains fields that go into the 'data' column.
+    
+    // We need to get the current 'data' object to merge, or use jsonb_set (complex).
+    // Simpler approach: fetch, merge, update.
+    
+    const { data: current, error: fetchError } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .select('data')
+      .eq('veiculo_atrelado', placa)
+      .single();
+      
+    if (fetchError) {
+       console.error('Error fetching checklist for partial update:', fetchError);
+       throw fetchError;
+    }
+    
+    const newData = { ...current.data, ...rest };
+    
+    const { data, error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .update({ data: newData })
+      .eq('veiculo_atrelado', placa)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating checklist partial:', error);
+      throw error;
+    }
+    return { ...data.data, placa: data.veiculo_atrelado };
   },
 
   async updateEscalaItemPartial(id: number, updates: any) {
