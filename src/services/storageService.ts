@@ -1,50 +1,115 @@
 import { supabase } from './supabase';
 
+const TABLES = {
+  GROUPS: 'scale_groups',
+  ESCALA: 'escala_items',
+  CHECKLISTS: 'checklists',
+  NOTIFICATIONS: 'notifications',
+};
+
 export const storageService = {
-  // --- ESCALAS E DOCAS ---
-  // Remove ID e campos protegidos para evitar o erro 428C9
-  async updateEscalaItemPartial(id: number, updates: any) {
+  // --- SCALE GROUPS ---
+  async getScaleGroups() {
+    const { data, error } = await supabase.from(TABLES.GROUPS).select('*').order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching scale groups:', error); return []; }
+    return data || [];
+  },
+
+  async saveScaleGroup(group: any) {
+    if (group.id) return this.updateScaleGroupPartial(group.id, group);
+    const { data, error } = await supabase.from(TABLES.GROUPS).insert(group).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateScaleGroupPartial(id: number, updates: any) {
     const { id: _, created_at: __, ...cleanUpdates } = updates;
-    const { data, error } = await supabase
-      .from('escala_items')
-      .update(cleanUpdates)
-      .eq('id', id);
+    const { data, error } = await supabase.from(TABLES.GROUPS).update(cleanUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
 
   async deleteScaleGroup(id: number) {
-    const { error } = await supabase.from('scale_groups').delete().eq('id', id);
+    const { error } = await supabase.from(TABLES.GROUPS).delete().eq('id', id);
     if (error) throw error;
   },
 
-  // --- CHECKLISTS (VISTORIAS) ---
-  // Ajustado para usar 'veiculo_id' conforme seu banco real (image_032748.png)
-  async saveChecklist(checklist: any) {
-    const { id, created_at, ...rest } = checklist;
-    const { data, error } = await supabase
-      .from('checklists')
-      .insert([rest]) 
-      .select();
+  // --- ESCALA ITEMS ---
+  async getEscalaItems() {
+    const { data, error } = await supabase.from(TABLES.ESCALA).select('*').order('id', { ascending: false });
+    if (error) { console.error('Error fetching escala items:', error); return []; }
+    return data || [];
+  },
+
+  async saveEscalaItem(item: any) {
+    if (item.id) return this.updateEscalaItemPartial(item.id, item);
+    const { data, error } = await supabase.from(TABLES.ESCALA).insert(item).select().single();
     if (error) throw error;
     return data;
   },
 
+  async updateEscalaItemPartial(id: number, updates: any) {
+    const { id: _, created_at: __, ...cleanUpdates } = updates;
+    const { data, error } = await supabase.from(TABLES.ESCALA).update(cleanUpdates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async saveEscalaItems(newItems: any[]) {
+    const cleanItems = newItems.map(item => { const { id, created_at, ...rest } = item; return rest; });
+    const { data, error } = await supabase.from(TABLES.ESCALA).insert(cleanItems).select();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteEscalaItem(id: number) {
+    const { error } = await supabase.from(TABLES.ESCALA).delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- CHECKLISTS ---
   async getChecklists() {
-    const { data, error } = await supabase
-      .from('checklists')
-      .select('*, veiculos(place)')
-      .order('created_at', { ascending: false });
+    // Restaurado! Impede o erro de "is not a function"
+    const { data, error } = await supabase.from(TABLES.CHECKLISTS).select('*').order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching checklists:', error); return []; }
     return data || [];
   },
 
-  // --- NOTIFICAÇÕES ---
-  // Usa 'timestamp' em vez de 'created_at' conforme image_032748.png
+  async saveChecklist(checklist: any) {
+    const { id, created_at, placa, ...rest } = checklist; // Remove campos que dão erro no banco
+    const { data, error } = await supabase.from(TABLES.CHECKLISTS).insert([rest]).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateChecklistPartial(id: string, updates: any) {
+    const { id: _, created_at: __, placa: ___, ...cleanUpdates } = updates;
+    const { data, error } = await supabase.from(TABLES.CHECKLISTS).update(cleanUpdates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteChecklist(id: string) {
+    const { error } = await supabase.from(TABLES.CHECKLISTS).delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- NOTIFICATIONS ---
   async getNotifications() {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .order('timestamp', { ascending: false });
+    const { data, error } = await supabase.from(TABLES.NOTIFICATIONS).select('*').order('timestamp', { ascending: false }).limit(50);
+    if (error) { console.error('Error fetching notifications:', error); return []; }
     return data || [];
+  },
+
+  async saveNotification(notification: any) {
+    const { id, created_at, ...rest } = notification;
+    const { data, error } = await supabase.from(TABLES.NOTIFICATIONS).insert(rest).select().single();
+    if (error) return null;
+    return data;
+  },
+
+  async clearNotifications() {
+    const { error } = await supabase.from(TABLES.NOTIFICATIONS).delete().neq('id', '0');
+    if (error) throw error;
   }
 };
