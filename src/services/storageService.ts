@@ -7,71 +7,69 @@ const TABLES = {
 };
 
 export const storageService = {
-  // --- BUSCAR LISTA DE VISTORIAS (Para exibir na aba Checklist) ---
+  // --- BUSCAR LISTA (CORRIGIDO PARA APARECER A PLACA) ---
   async getChecklists() {
-    const { data, error } = await supabase
-      .from(TABLES.CHECKLISTS)
-      .select(`
-        *,
-        veiculos (
-          placa
-        )
-      `)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Erro ao buscar vistorias:', error.message);
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.CHECKLISTS)
+        .select(`
+          *,
+          veiculos (
+            placa
+          )
+        `) // Esta parte busca a placa na outra tabela
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+
+      // Mapeia os dados para que o componente front-end encontre a 'placa' facilmente
+      return (data || []).map(item => ({
+        ...item,
+        placa: item.veiculos?.placa || 'PLACA S/N'
+      }));
+    } catch (error) {
+      console.error('Erro ao buscar vistorias:', error);
       return [];
     }
-    return data || [];
   },
 
-  // --- SALVAR VISTORIA COM PLACA MANUAL ---
+  // --- SALVAR VISTORIA COM AUTO-CADASTRO DE VEÍCULO ---
   async saveChecklist(checklist: any) {
     try {
-      const placaFormatada = checklist.placa?.toUpperCase().trim();
+      const placaLimpa = checklist.placa?.toUpperCase().trim();
 
-      // 1. Verifica se o veículo já existe no cadastro
+      // 1. Busca ou cria o veículo
       let { data: veiculo } = await supabase
         .from(TABLES.VEICULOS)
         .select('id')
-        .eq('placa', placaFormatada)
+        .eq('placa', placaLimpa)
         .maybeSingle();
 
-      // 2. Se a placa for nova, cadastra o veículo automaticamente (Auto-cadastro)
       if (!veiculo) {
-        const { data: novoVeiculo, error: vError } = await supabase
+        const { data: novoV, error: erroV } = await supabase
           .from(TABLES.VEICULOS)
-          .insert([{ 
-            placa: placaFormatada, 
-            modelo: checklist.tipo || 'Não informado' 
-          }])
-          .select()
-          .single();
-
-        if (vError) throw vError;
-        veiculo = novoVeiculo;
+          .insert([{ placa: placaLimpa, modelo: checklist.tipo }])
+          .select().single();
+        if (erroV) throw erroV;
+        veiculo = novoV;
       }
 
-      // 3. Salva a vistoria vinculada ao ID do veículo (UUID)
-      // Removemos campos extras para evitar erro PGRST204 (image_02bae0)
-      const payload = {
-        veiculo_id: veiculo.id,
-        status: checklist.status || 'Realizada',
-        observacoes: checklist.observacoes || '',
-        data_vistoria: new Date().toISOString()
-      };
-
+      // 2. Salva a vistoria (usando apenas colunas que existem no banco)
       const { data, error } = await supabase
         .from(TABLES.CHECKLISTS)
-        .insert([payload])
-        .select()
+        .insert([{
+          veiculo_id: veiculo.id,
+          status: 'Realizada',
+          observacoes: checklist.observacoes || '',
+          data_vistoria: new Date().toISOString()
+        }])
+        .select('*, veiculos(placa)') // Já retorna com a placa para atualizar a tela
         .single();
 
       if (error) throw error;
-      return data;
+      return { ...data, placa: data.veiculos?.placa };
     } catch (err: any) {
-      console.error('Falha ao salvar:', err.message);
+      console.error('Erro ao salvar:', err.message);
       throw err;
     }
   },
@@ -82,20 +80,7 @@ export const storageService = {
       .from(TABLES.CHECKLISTS)
       .delete()
       .eq('id', id);
-
-    if (error) {
-      console.error('Erro ao deletar:', error.message);
-      throw error;
-    }
+    if (error) throw error;
     return true;
-  },
-
-  // --- NOTIFICAÇÕES (Mapeado corretamente) ---
-  async getNotifications() {
-    const { data, error } = await supabase
-      .from(TABLES.NOTIFICATIONS)
-      .select('*')
-      .order('timestamp', { ascending: false });
-    return data || [];
   }
 };
