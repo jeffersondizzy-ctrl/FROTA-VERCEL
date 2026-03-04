@@ -8,22 +8,15 @@ const TABLES = {
 };
 
 export const storageService = {
-  // --- FUNÇÃO MESTRE PARA EVITAR ERRO DE ID (428C9) ---
-  async updatePartial(table: string, id: any, updates: any, idColumn = 'id') {
-    const { id: _, ...cleanUpdates } = updates; // Remove o ID do corpo da atualização
+  // --- ESCALAS (RESOLVE ERRO 428C9) ---
+  async updateScaleGroupPartial(id: number, updates: any) {
+    const { id: _, created_at: __, ...cleanUpdates } = updates;
     const { data, error } = await supabase
-      .from(table)
+      .from(TABLES.GROUPS)
       .update(cleanUpdates)
-      .eq(idColumn, id)
-      .select();
+      .eq('id', id);
     if (error) throw error;
     return data;
-  },
-
-  // --- ESCALAS (Arquivar e Excluir) ---
-  async getScaleGroups() {
-    const { data, error } = await supabase.from(TABLES.GROUPS).select('*');
-    return data || [];
   },
 
   async deleteScaleGroup(id: number) {
@@ -31,25 +24,49 @@ export const storageService = {
     if (error) throw error;
   },
 
-  // --- CHECKLISTS (Onde está o erro de "placa" e "tipo") ---
+  // --- DOCAS E ITENS (RESOLVE ERRO 428C9) ---
+  async updateEscalaItemPartial(id: number, updates: any) {
+    const { id: _, created_at: __, ...cleanUpdates } = updates;
+    const { data, error } = await supabase
+      .from(TABLES.ESCALA)
+      .update(cleanUpdates)
+      .eq('id', id);
+    if (error) throw error;
+    return data;
+  },
+
+  // --- CHECKLISTS (NOMES DE COLUNAS CORRIGIDOS CONFORME SCHEMA) ---
   async getChecklists() {
-    // Busca simples sem filtros que quebram o app
-    const { data, error } = await supabase.from(TABLES.CHECKLISTS).select('*');
-    if (error) return [];
+    const { data, error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .select('*, veiculos(place)') // Faz um join para pegar a placa se precisar
+      .order('created_at', { ascending: false });
     return data || [];
   },
 
   async saveChecklist(checklist: any) {
-    // Removemos campos que podem não existir para testar o salvamento básico
-    const { id, created_at, ...basicData } = checklist;
+    // Ajustando os campos para o que existe no seu banco (image_032748.png)
+    const dataToSave = {
+      veiculo_id: checklist.veiculo_id, // Use o UUID do veículo
+      status: checklist.status || 'Pendente',
+      observacoes: checklist.observacoes || '',
+      data_vistoria: new Date().toISOString()
+    };
+
     const { data, error } = await supabase
       .from(TABLES.CHECKLISTS)
-      .insert([basicData])
+      .insert([dataToSave])
       .select();
-    if (error) {
-      console.error("Erro real do banco:", error.message);
-      throw error;
-    }
+    if (error) throw error;
     return data;
+  },
+
+  // --- NOTIFICAÇÕES (USANDO TIMESTAMP) ---
+  async getNotifications() {
+    const { data, error } = await supabase
+      .from(TABLES.NOTIFICATIONS)
+      .select('*')
+      .order('timestamp', { ascending: false }); // Seu banco usa timestamp (image_032748.png)
+    return data || [];
   }
 };
