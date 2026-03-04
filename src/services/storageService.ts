@@ -1,28 +1,69 @@
 import { supabase } from './supabase';
 
+const TABLES = {
+  CHECKLISTS: 'checklists',
+  VEICULOS: 'veiculos',
+  NOTIFICATIONS: 'notifications'
+};
+
 export const storageService = {
+  // --- BUSCAR LISTA DE VISTORIAS (Para exibir na aba Checklist) ---
+  async getChecklists() {
+    const { data, error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .select(`
+        *,
+        veiculos (
+          placa
+        )
+      `)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Erro ao buscar vistorias:', error.message);
+      return [];
+    }
+    return data || [];
+  },
+
+  // --- SALVAR VISTORIA COM PLACA MANUAL ---
   async saveChecklist(checklist: any) {
     try {
-      // 1. Buscar o ID do veículo pela placa (O banco exige UUID, não texto)
-      const { data: vData } = await supabase
-        .from('veiculos')
+      const placaFormatada = checklist.placa?.toUpperCase().trim();
+
+      // 1. Verifica se o veículo já existe no cadastro
+      let { data: veiculo } = await supabase
+        .from(TABLES.VEICULOS)
         .select('id')
-        .eq('placa', checklist.placa?.toUpperCase())
+        .eq('placa', placaFormatada)
         .maybeSingle();
 
-      if (!vData) throw new Error("Placa não cadastrada no sistema.");
+      // 2. Se a placa for nova, cadastra o veículo automaticamente (Auto-cadastro)
+      if (!veiculo) {
+        const { data: novoVeiculo, error: vError } = await supabase
+          .from(TABLES.VEICULOS)
+          .insert([{ 
+            placa: placaFormatada, 
+            modelo: checklist.tipo || 'Não informado' 
+          }])
+          .select()
+          .single();
 
-      // 2. MONTAGEM MANUAL (Não enviamos o objeto 'checklist' inteiro)
-      // Isso impede que campos como 'tipo' ou 'tipo_veiculo' cheguem ao banco
+        if (vError) throw vError;
+        veiculo = novoVeiculo;
+      }
+
+      // 3. Salva a vistoria vinculada ao ID do veículo (UUID)
+      // Removemos campos extras para evitar erro PGRST204 (image_02bae0)
       const payload = {
-        veiculo_id: vData.id, // O ID real do banco (cite: image_032748)
+        veiculo_id: veiculo.id,
         status: checklist.status || 'Realizada',
         observacoes: checklist.observacoes || '',
         data_vistoria: new Date().toISOString()
       };
 
       const { data, error } = await supabase
-        .from('checklists')
+        .from(TABLES.CHECKLISTS)
         .insert([payload])
         .select()
         .single();
@@ -30,22 +71,31 @@ export const storageService = {
       if (error) throw error;
       return data;
     } catch (err: any) {
-      console.error("Erro fatal ao salvar:", err.message);
+      console.error('Falha ao salvar:', err.message);
       throw err;
     }
   },
 
-  async getChecklists() {
-    // Busca checklists e traz a placa da tabela relacionada 'veiculos'
-    const { data, error } = await supabase
-      .from('checklists')
-      .select('*, veiculos(placa)') 
-      .order('created_at', { ascending: false });
-    
+  // --- EXCLUIR VISTORIA ---
+  async deleteChecklist(id: string | number) {
+    const { error } = await supabase
+      .from(TABLES.CHECKLISTS)
+      .delete()
+      .eq('id', id);
+
     if (error) {
-      console.error("Erro ao carregar:", error.message);
-      return [];
+      console.error('Erro ao deletar:', error.message);
+      throw error;
     }
+    return true;
+  },
+
+  // --- NOTIFICAÇÕES (Mapeado corretamente) ---
+  async getNotifications() {
+    const { data, error } = await supabase
+      .from(TABLES.NOTIFICATIONS)
+      .select('*')
+      .order('timestamp', { ascending: false });
     return data || [];
   }
 };
