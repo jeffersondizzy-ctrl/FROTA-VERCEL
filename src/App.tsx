@@ -1168,7 +1168,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
 
   // Details View State
   const [escalaItems, setEscalaItems] = useState<EscalaItem[]>([]);
-  const [checklists, setChecklists] = useState<{ veiculo_atrelado: string; status: string; validade: string | null; tipo_veiculo: string }[]>([]);
+  const [checklists, setChecklists] = useState<{ placa: string; status: string; validade: string | null; tipo: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1344,7 +1344,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
     }
 
     const checklists = await storageService.getChecklists();
-    const checklistItem = checklists.find((c: any) => c.veiculo_atrelado === cavaloUpper);
+    const checklistItem = checklists.find((c: any) => c.placa === cavaloUpper);
     const checklistStatus = checklistItem ? getEffectiveStatus(checklistItem.status, checklistItem.validade) : 'Checklist OK';
 
     const newTempItem = {
@@ -1498,7 +1498,7 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
     try {
       setLoading(true);
       const checklists = await storageService.getChecklists();
-      const checklistItem = checklists.find((c: any) => c.veiculo_atrelado === cavaloUpper);
+      const checklistItem = checklists.find((c: any) => c.placa === cavaloUpper);
       const checklistStatus = checklistItem ? getEffectiveStatus(checklistItem.status, checklistItem.validade) : 'Checklist OK';
 
       const entryData = {
@@ -1830,10 +1830,10 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
                     value={cavalo}
                     onChange={(e) => setCavalo(e.target.value)}
                     options={checklists
-                      .filter(c => c.tipo_veiculo === 'Cavalo' && !tempVehicles.some(v => v.cavalo === c.veiculo_atrelado))
+                      .filter(c => c.tipo === 'Cavalo' && !tempVehicles.some(v => v.cavalo === c.placa))
                       .map(c => ({
-                        label: `${c.veiculo_atrelado} [${getEffectiveStatus(c.status, c.validade)}]`,
-                        value: c.veiculo_atrelado
+                        label: `${c.placa} [${getEffectiveStatus(c.status, c.validade)}]`,
+                        value: c.placa
                       }))}
                     placeholder="Selecione..."
                   />
@@ -1967,10 +1967,10 @@ function EscalaPage({ setPage, currentUser }: { setPage: (page: any) => void; cu
                     value={cavalo}
                     onChange={(e) => setCavalo(e.target.value)}
                     options={checklists
-                      .filter(c => c.tipo_veiculo === 'Cavalo')
+                      .filter(c => c.tipo === 'Cavalo')
                       .map(c => ({
-                        label: `${c.veiculo_atrelado} [${getEffectiveStatus(c.status, c.validade)}]`,
-                        value: c.veiculo_atrelado
+                        label: `${c.placa} [${getEffectiveStatus(c.status, c.validade)}]`,
+                        value: c.placa
                       }))}
                     placeholder="Selecione..."
                   />
@@ -2500,7 +2500,7 @@ const EscalaCard = ({ item, index, isExpanded, onToggle, onUpdate, onEdit, onOpt
 
 function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void; currentUser: string }) {
   const canEdit = ['gr3c', 'jeff'].includes(currentUser);
-  const [checklists, setChecklists] = useState<{ veiculo_atrelado: string; status: string; validade: string | null; tipo_veiculo: string; created_at: string }[]>([]);
+  const [checklists, setChecklists] = useState<{ placa: string; status: string; validade: string | null; tipo: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedPlaca, setExpandedPlaca] = useState<string | null>(null);
@@ -2538,16 +2538,16 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
       setLoading(true);
       const currentList = await storageService.getChecklists();
 
-      if (currentList.some(item => item.veiculo_atrelado === placaUpper)) {
+      if (currentList.some(item => item.placa === placaUpper)) {
         alert('Esta placa já está registrada no sistema.');
         return;
       }
 
       const newItem = { 
-        veiculo_atrelado: placaUpper, 
+        placa: placaUpper, 
         status: 'Checklist OK', 
         validade: addValidade || null, 
-        tipo_veiculo: addTipo,
+        tipo: addTipo,
         created_at: new Date().toISOString()
       };
 
@@ -2573,7 +2573,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
           ...target, 
           status: newStatus, 
           validade: newValidade || null, 
-          tipo_veiculo: newTipo 
+          tipo: newTipo 
         };
         await storageService.saveChecklist(updated);
         fetchChecklists();
@@ -2596,7 +2596,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
       if (target) {
         // ATUALIZAÇÃO OTIMISTA: Remove da tela na hora!
         setChecklists(prev => prev.filter((_, i) => i !== index));
-        await storageService.deleteChecklist(target.veiculo_atrelado);
+        await storageService.deleteChecklist(target.id || target.placa);
       }
     } catch (error) {
       console.error('Failed to delete checklist:', error);
@@ -2678,7 +2678,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
         ) : (
           checklists.map((c, idx) => (
             <motion.div 
-              key={`${c.veiculo_atrelado}-${idx}`}
+              key={`${c.placa}-${idx}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.02 }}
@@ -2686,8 +2686,8 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
             >
               <div className="flex justify-between items-start mb-3">
                 <div className="flex flex-col">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">{c.tipo_veiculo}</span>
-                  <span className="text-lg font-black text-white font-mono tracking-tighter">{c.veiculo_atrelado}</span>
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">{c.tipo}</span>
+                  <span className="text-lg font-black text-white font-mono tracking-tighter">{c.placa}</span>
                 </div>
                 <div className="flex gap-1">
                   {canEdit && (
@@ -2696,7 +2696,7 @@ function ChecklistPage({ setPage, currentUser }: { setPage: (page: any) => void;
                         setEditingIndex(idx);
                         setNewStatus(c.status);
                         setNewValidade(c.validade ? c.validade.split('T')[0] : '');
-                        setNewTipo(c.tipo_veiculo);
+                        setNewTipo(c.tipo);
                       }} className="p-1.5 bg-white/5 rounded-lg text-slate-500 hover:text-white transition-colors" title="Editar">
                         <Pencil size={12} />
                       </button>

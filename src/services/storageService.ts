@@ -76,14 +76,14 @@ export const storageService = {
   },
 
   async saveChecklist(checklist: any) {
-    const { id, created_at, placa, ...rest } = checklist; // Remove campos que dão erro no banco
+    const { id, created_at, ...rest } = checklist; 
     const { data, error } = await supabase.from(TABLES.CHECKLISTS).insert([rest]).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateChecklistPartial(id: string, updates: any) {
-    const { id: _, created_at: __, placa: ___, ...cleanUpdates } = updates;
+    const { id: _, created_at: __, ...cleanUpdates } = updates;
     const { data, error } = await supabase.from(TABLES.CHECKLISTS).update(cleanUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
